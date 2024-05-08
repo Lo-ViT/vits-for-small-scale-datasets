@@ -22,17 +22,47 @@ from models.build_model import create_model
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import warnings
+import datetime
+import wandb
+from pathlib import Path
+import time
 warnings.filterwarnings("ignore", category=Warning)
 
 best_acc1 = 0
-MODELS = ['vit', 'swin' , 'cait']
+MODELS = ['vit', 'vit-ats', 'swin' , 'cait']
+home = str(Path.home())
+
+
+def get_time_stamp():
+    """
+    Generate a timestamp string with the current time.
+
+    This function fetches the current time and formats it into a string with the format 'minute-hour-day-month-year'. 
+    It is useful for creating unique identifiers based on the exact time of execution, such as for logging or naming files.
+
+    Returns:
+        str: A string representing the current time formatted as 'MM-HH-DD-MM-YYYY'.
+    """
+    # Get the current datetime
+    current_time = datetime.datetime.now()
+
+    # Format the datetime into a string with the desired structure
+    return current_time.strftime("%H:%M-%d.%m.%Y")
 
 
 def init_parser():
     parser = argparse.ArgumentParser(description='Vit small datasets quick training script')
 
     # Data args
-    parser.add_argument('--datapath', default='./data', type=str, help='dataset path')
+    parser.add_argument("--nowandb", help="Turn off WandB logging for debugging purpose.",action="store_true")
+    
+    parser.add_argument('--project', default='example-project', type=str, help='name of the WandB project')
+    
+    parser.add_argument('--name', default='example-experiment', type=str, help='name of the WandB experiment')
+    
+    parser.add_argument('--output_dir', default=f'data/out', type=str, help='output directory')
+
+    parser.add_argument('--datapath', default=f'data', type=str, help='dataset path')
     
     parser.add_argument('--dataset', default='CIFAR10', choices=['CIFAR10', 'CIFAR100', 'Tiny-Imagenet', 'SVHN','CINIC'], type=str, help='small dataset path')
 
@@ -118,7 +148,15 @@ def init_parser():
 
 
 def main(args):
-    global best_acc1    
+    global best_acc1  
+      
+    args.name = f"{args.name}-{get_time_stamp()}"
+    
+    if not args.nowandb:
+        wandb.init(
+            project=args.project,
+            name=args.name
+        )
     
     torch.cuda.set_device(args.gpu)
 
@@ -308,7 +346,15 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler,  args):
     model.train()
     loss_val, acc1_val = 0, 0
     n = 0
-        
+    wall_clock = 0.0
+    
+    def timed_prediction(images):
+        nonlocal wall_clock
+        before = time.time()
+        output = model(images)
+        torch.cuda.synchronize() 
+        wall_clock += time.time() - before
+        return output
     
     for i, (images, target) in enumerate(train_loader):
         if (not args.no_cuda) and torch.cuda.is_available():
@@ -321,12 +367,12 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler,  args):
             if r < args.mix_prob:
                 slicing_idx, y_a, y_b, lam, sliced = cutmix_data(images, target, args)
                 images[:, :, slicing_idx[0]:slicing_idx[2], slicing_idx[1]:slicing_idx[3]] = sliced
-                output = model(images)
+                output = timed_prediction(images)
                 loss =  mixup_criterion(criterion, output, y_a, y_b, lam)
                 
                    
             else:
-                output = model(images)
+                output = timed_prediction(images)
                 
                 loss = criterion(output, target)
                                
@@ -336,14 +382,14 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler,  args):
             r = np.random.rand(1)
             if r < args.mix_prob:
                 images, y_a, y_b, lam = mixup_data(images, target, args)
-                output = model(images)
+                output = timed_prediction(images)
                 
                 loss =  mixup_criterion(criterion, output, y_a, y_b, lam)
                 
                 
             
             else:
-                output = model(images)
+                output = timed_prediction(images)
                 
                 loss =  criterion(output, target)
                  
@@ -358,7 +404,7 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler,  args):
                 if switching_prob < 0.5:
                     slicing_idx, y_a, y_b, lam, sliced = cutmix_data(images, target, args)
                     images[:, :, slicing_idx[0]:slicing_idx[2], slicing_idx[1]:slicing_idx[3]] = sliced
-                    output = model(images)
+                    output = timed_prediction(images)
                     
                     loss =  mixup_criterion(criterion, output, y_a, y_b, lam)
                     
@@ -366,18 +412,18 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler,  args):
                 # Mixup
                 else:
                     images, y_a, y_b, lam = mixup_data(images, target, args)
-                    output = model(images)
+                    output = timed_prediction(images)
                     
                     loss = mixup_criterion(criterion, output, y_a, y_b, lam) 
                     
             else:
-                output = model(images)
+                output = timed_prediction(images)
                 
                 loss = criterion(output, target) 
           
         # No Mix
         else:
-            output = model(images)
+            output = timed_prediction(images)
                                 
             loss = criterion(output, target)
             
@@ -400,7 +446,10 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler,  args):
     logger_dict.update(keys[0], avg_loss)
     logger_dict.update(keys[1], avg_acc1)
     writer.add_scalar("Loss/train", avg_loss, epoch)
-    writer.add_scalar("Acc/train", avg_acc1, epoch)
+    writer.add_scalar("Acc/train", avg_acc1, epoch)    
+    
+    if not args.nowandb: wandb.log({"train/loss": avg_loss, "train/acc": avg_acc1, "train/wall_clock": wall_clock})
+
     
     return lr
 
@@ -409,14 +458,17 @@ def validate(val_loader, model, criterion, lr, args, epoch=None):
     model.eval()
     loss_val, acc1_val = 0, 0
     n = 0
+    wall_clock = 0.0
     with torch.no_grad():
         for i, (images, target) in enumerate(val_loader):
             if (not args.no_cuda) and torch.cuda.is_available():
                 images = images.cuda(args.gpu, non_blocking=True)
                 target = target.cuda(args.gpu, non_blocking=True)
 
-            
+            before = time.time()
             output = model(images)
+            torch.cuda.synchronize() 
+            wall_clock += time.time() - before
             loss = criterion(output, target)
             
             acc = accuracy(output, target, (1, 5))
@@ -438,6 +490,8 @@ def validate(val_loader, model, criterion, lr, args, epoch=None):
     
     writer.add_scalar("Loss/val", avg_loss, epoch)
     writer.add_scalar("Acc/val", avg_acc1, epoch)
+    
+    if not args.nowandb: wandb.log({"val/loss": avg_loss, "val/acc": avg_acc1, "val/wall_clock": wall_clock})
 
     
     return avg_acc1
@@ -472,12 +526,12 @@ if __name__ == '__main__':
         print("lsa present")
         model_name += "-LSA"
         
-    model_name += f"-{args.tag}-{args.dataset}-LR[{args.lr}]-Seed{args.seed}"
-    save_path = os.path.join(os.getcwd(), 'save_finetuned', model_name)
+    model_name += f"{args.name}-{args.tag}-{args.dataset}-LR[{args.lr}]-Seed{args.seed}"
+    save_path = os.path.join(args.output_dir, args.project, args.name, 'save_finetuned', model_name)
     if save_path:
         os.makedirs(save_path, exist_ok=True)
         
-    writer = SummaryWriter(os.path.join(os.getcwd(), 'tensorboard', model_name))
+    writer = SummaryWriter(os.path.join(args.output_dir, args.project, args.name, 'tensorboard', model_name))
     
     # logger
 

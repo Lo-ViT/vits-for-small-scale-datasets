@@ -1,0 +1,7 @@
+**/__pycache__
+save_finetuned
+tensorboard
+data
+wandb
+output
+venv
