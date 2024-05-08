@@ -1,0 +1,3 @@
+[submodule "submodules/ATS"]
+	path = submodules/ATS
+	url = https://github.com/Lo-ViT/ATS.git
