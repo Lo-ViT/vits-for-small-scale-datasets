@@ -60,9 +60,9 @@ def init_parser():
     
     parser.add_argument('--name', default='example-experiment', type=str, help='name of the WandB experiment')
     
-    parser.add_argument('--output_dir', default=f'{home}/vits-for-small-scale-datasets/data/out', type=str, help='output directory')
+    parser.add_argument('--output_dir', default=f'{home}/data/out', type=str, help='output directory')
 
-    parser.add_argument('--datapath', default=f'{home}/vits-for-small-scale-datasets/data', type=str, help='dataset path')
+    parser.add_argument('--datapath', default=f'{home}/data', type=str, help='dataset path')
     
     parser.add_argument('--dataset', default='CIFAR10', choices=['CIFAR10', 'CIFAR100', 'Tiny-Imagenet', 'SVHN','CINIC'], type=str, help='small dataset path')
 
@@ -136,7 +136,7 @@ def init_parser():
     
     parser.add_argument('--is_SPT', action='store_true', help='Shifted Patch Tokenization')
 
-    parser.add_argument('--pretrained_weights', default='{home}/vits-for-small-scale-datasets/models/pretrained_weights/vit_cifar10_patch4_input32.pth', type=str, help="Path to pretrained weights to evaluate.")
+    parser.add_argument('--pretrained_weights', default='', type=str, help="Path to pretrained weights to evaluate.")
 
     parser.add_argument("--checkpoint_key", default="teacher", type=str, help='Key to use in the checkpoint (example: "teacher")')
 

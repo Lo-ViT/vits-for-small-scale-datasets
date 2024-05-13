@@ -56,28 +56,15 @@ def main(args):
     # Set up model
     model = create_model(data_info['img_size'], data_info['n_classes'], args).to(device)
     if args.model:
-        #model.load_state_dict(torch.load(args.model, map_location=device)["model_state_dict"])
-        model_dict = model.state_dict()
-        print("loading pretrained weights . . .")
-        state_dict = torch.load(args.model, map_location="cpu")
-        if args.checkpoint_key is not None and args.checkpoint_key in state_dict:
-            print(f"Take key {args.checkpoint_key} in provided checkpoint dict")
-            state_dict = state_dict[args.checkpoint_key]
-        # remove `module.` prefix
-        state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
-        # remove `backbone.` prefix induced by multicrop wrapper
-        state_dict = {k.replace("backbone.", ""): v for k, v in state_dict.items()}
-        state_dict={k:v if v.size()==model_dict[k].size()  else  model_dict[k] for k,v in zip(model_dict.keys(), state_dict.values())}
-        model.load_state_dict(state_dict, strict=False)
+        model.load_state_dict(torch.load(args.model, map_location=device)["model_state_dict"])
 
     # Test model
     test_model(model, test_loader, criterion, device)
 
 if __name__ == "__main__":
-    home = str(Path.home())
     parser = init_parser()
     # Add arguments similar to those in the main training script
-    parser.add_argument('--model', default=f'{home}/vits-for-small-scale-datasets/models/pretrained_weights/vit_cifar10_patch4_input32.pth', type=str, help='Path to the trained model weights')
+    parser.add_argument('--model', type=str, help='Path to the trained model weights')
     # logger
 
     logger = log.getLogger(__name__)
