@@ -3,3 +3,6 @@ save_finetuned
 tensorboard
 data
 wandb
+LoVIT/
+.vscode/
+models/pretrained_weights
