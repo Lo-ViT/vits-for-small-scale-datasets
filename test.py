@@ -45,7 +45,11 @@ def test_model(model, test_loader, criterion, device):
     return avg_loss, accuracy, flops
 
 def main(args):
-    device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+    if torch.cuda.is_available() and args.gpu is not None:
+        device = torch.device(f"cuda:{args.gpu}")
+        torch.cuda.set_device(device)
+    else:
+        device = torch.device("cpu")
     criterion = torch.nn.CrossEntropyLoss()
 
     # Set up data
