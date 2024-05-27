@@ -5,3 +5,4 @@ data
 wandb
 output
 venv
+**/*.pth
