@@ -8,5 +8,4 @@ python finetune.py --arch vit  \
                    --dataset Tiny-Imagenet \
                    --datapath /graphics/scratch2/students/nguyenlo/tiny-imagenet-200 \
                    --batch_size 512 \
-                   --epochs 100 \
-                   --gpu 0
+                   --epochs 100
