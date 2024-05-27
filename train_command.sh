@@ -1,10 +1,10 @@
 # TODO: change this to your need
 
 python finetune.py --arch vit  \
-                   --project "Example project" \
-                   --name "Example experiment" \
+                   --project "Vit on TinyImageNet" \
+                   --name "0005 Train TinyImageNet on local PC" \
                    --dataset Tiny-Imagenet \
-                   --datapath /graphics/scratch2/datasets/tiny-imagenet-200/tiny-imagenet-200 \
-                   --batch_size 512 \
+                   --datapath /home/long/data/tiny-imagenet-200 \
+                   --batch_size 128 \
                    --epochs 100 \
                    --gpu 0
