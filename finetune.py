@@ -158,13 +158,19 @@ def main(args):
             name=args.name
         )
     
-    torch.cuda.set_device(args.gpu)
+    #torch.cuda.set_device()
 
     data_info = datainfo(logger, args)
     
     model = create_model(data_info['img_size'], data_info['n_classes'], args)
    
-    model.cuda(args.gpu)  
+    # If multiple GPUs are available
+    if torch.cuda.device_count() > 1:
+        print("Let's use", torch.cuda.device_count(), "GPUs!")
+        model = nn.DataParallel(model)
+        model.cuda()
+    else:
+        model.cuda()  
         
     print(Fore.GREEN+'*'*80)
     logger.debug(f"Creating model: {model_name}")    
@@ -202,7 +208,7 @@ def main(args):
         logger.debug(f'Stochastic depth({args.sd}) used ')
         print('*'*80+Style.RESET_ALL)         
 
-    criterion = criterion.cuda(args.gpu)
+    criterion = criterion.cuda()
 
     normalize = [transforms.Normalize(mean=data_info['stat'][0], std=data_info['stat'][1])]
 
@@ -358,8 +364,8 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler,  args):
     
     for i, (images, target) in enumerate(train_loader):
         if (not args.no_cuda) and torch.cuda.is_available():
-            images = images.cuda(args.gpu, non_blocking=True)
-            target = target.cuda(args.gpu, non_blocking=True)
+            images = images.cuda(non_blocking=True)
+            target = target.cuda(non_blocking=True)
                 
         # Cutmix only
         if args.cm and not args.mu:
@@ -462,8 +468,8 @@ def validate(val_loader, model, criterion, lr, args, epoch=None):
     with torch.no_grad():
         for i, (images, target) in enumerate(val_loader):
             if (not args.no_cuda) and torch.cuda.is_available():
-                images = images.cuda(args.gpu, non_blocking=True)
-                target = target.cuda(args.gpu, non_blocking=True)
+                images = images.cuda(non_blocking=True)
+                target = target.cuda(non_blocking=True)
 
             before = time.time()
             output = model(images)
