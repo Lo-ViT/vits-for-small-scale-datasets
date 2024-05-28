@@ -1,6 +1,6 @@
 # TODO: change this to your need
 
-python finetune.py --arch vit-ats \
+python finetune.py --arch vit-ats  \
                    --pretrained_weights vit_timnet_patch8_input64.pth \
                    --output_dir /graphics/scratch2/students/nguyenlo \
                    --project "Vit on TinyImageNet" \
