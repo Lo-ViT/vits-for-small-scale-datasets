@@ -158,7 +158,7 @@ def main(args):
             name=args.name
         )
     
-    #torch.cuda.set_device()
+    torch.cuda.set_device(args.gpu)
 
     data_info = datainfo(logger, args)
     
@@ -208,7 +208,7 @@ def main(args):
         logger.debug(f'Stochastic depth({args.sd}) used ')
         print('*'*80+Style.RESET_ALL)         
 
-    criterion = criterion.cuda()
+    criterion = criterion.cuda(args.gpu)
 
     normalize = [transforms.Normalize(mean=data_info['stat'][0], std=data_info['stat'][1])]
 
@@ -356,16 +356,16 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler,  args):
     
     def timed_prediction(images):
         nonlocal wall_clock
-        # before = time.time()
+        before = time.time()
         output = model(images)
-        # torch.cuda.synchronize() 
-        # wall_clock += time.time() - before
+        torch.cuda.synchronize() 
+        wall_clock += time.time() - before
         return output
     
     for i, (images, target) in enumerate(train_loader):
         if (not args.no_cuda) and torch.cuda.is_available():
-            images = images.cuda(non_blocking=True)
-            target = target.cuda(non_blocking=True)
+            images = images.cuda(args.gpu, non_blocking=True)
+            target = target.cuda(args.gpu, non_blocking=True)
                 
         # Cutmix only
         if args.cm and not args.mu:
@@ -373,12 +373,12 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler,  args):
             if r < args.mix_prob:
                 slicing_idx, y_a, y_b, lam, sliced = cutmix_data(images, target, args)
                 images[:, :, slicing_idx[0]:slicing_idx[2], slicing_idx[1]:slicing_idx[3]] = sliced
-                output = model(images)
+                output = timed_prediction(images)
                 loss =  mixup_criterion(criterion, output, y_a, y_b, lam)
                 
                    
             else:
-                output = model(images)
+                output = timed_prediction(images)
                 
                 loss = criterion(output, target)
                                
@@ -388,14 +388,14 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler,  args):
             r = np.random.rand(1)
             if r < args.mix_prob:
                 images, y_a, y_b, lam = mixup_data(images, target, args)
-                output = model(images)
+                output = timed_prediction(images)
                 
                 loss =  mixup_criterion(criterion, output, y_a, y_b, lam)
                 
                 
             
             else:
-                output = model(images)
+                output = timed_prediction(images)
                 
                 loss =  criterion(output, target)
                  
@@ -410,7 +410,7 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler,  args):
                 if switching_prob < 0.5:
                     slicing_idx, y_a, y_b, lam, sliced = cutmix_data(images, target, args)
                     images[:, :, slicing_idx[0]:slicing_idx[2], slicing_idx[1]:slicing_idx[3]] = sliced
-                    output = model(images)
+                    output = timed_prediction(images)
                     
                     loss =  mixup_criterion(criterion, output, y_a, y_b, lam)
                     
@@ -418,18 +418,18 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler,  args):
                 # Mixup
                 else:
                     images, y_a, y_b, lam = mixup_data(images, target, args)
-                    output = model(images)
+                    output = timed_prediction(images)
                     
                     loss = mixup_criterion(criterion, output, y_a, y_b, lam) 
                     
             else:
-                output = model(images)
+                output = timed_prediction(images)
                 
                 loss = criterion(output, target) 
           
         # No Mix
         else:
-            output = model(images)
+            output = timed_prediction(images)
                                 
             loss = criterion(output, target)
             
@@ -468,13 +468,13 @@ def validate(val_loader, model, criterion, lr, args, epoch=None):
     with torch.no_grad():
         for i, (images, target) in enumerate(val_loader):
             if (not args.no_cuda) and torch.cuda.is_available():
-                images = images.cuda(non_blocking=True)
-                target = target.cuda(non_blocking=True)
+                images = images.cuda(args.gpu, non_blocking=True)
+                target = target.cuda(args.gpu, non_blocking=True)
 
-            # before = time.time()
+            before = time.time()
             output = model(images)
-            # torch.cuda.synchronize() 
-            # wall_clock += time.time() - before
+            torch.cuda.synchronize() 
+            wall_clock += time.time() - before
             loss = criterion(output, target)
             
             acc = accuracy(output, target, (1, 5))
