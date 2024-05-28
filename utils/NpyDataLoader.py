@@ -1,6 +1,7 @@
 import numpy as np
 from torch.utils.data import Dataset
 from torchvision import transforms
+from PIL import Image
 
 class NpyDataLoader(Dataset):
     def __init__(self, image_file, label_file, transform=None):
@@ -15,6 +16,7 @@ class NpyDataLoader(Dataset):
         # Load data from .npy files
         self.images = np.load(image_file)
         self.labels = np.load(label_file)
+        print(f"Loaded {len(self.images)} images.")
         self.transform = transform
 
     def __len__(self):
@@ -32,9 +34,11 @@ class NpyDataLoader(Dataset):
             tuple: (image, label) where image is the transformed image, and label is the corresponding label.
         """
         # Load image and label
-        image = self.images[idx]
+        image = self.images[idx].squeeze()
         label = self.labels[idx]
 
+        # Convert numpy array to PIL Image to apply transformation
+        image = Image.fromarray(image)
         if self.transform:
             image = self.transform(image)
 
