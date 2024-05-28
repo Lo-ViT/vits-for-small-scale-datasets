@@ -9,4 +9,4 @@ python finetune.py --arch vit-ats \
                    --datapath /graphics/scratch2/students/nguyenlo/tiny-imagenet-200 \
                    --batch_size 128 \
                    --epochs 100 \
-                   --gpu 6
+                   --gpu 7
