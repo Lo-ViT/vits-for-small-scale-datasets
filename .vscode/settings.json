@@ -3,11 +3,12 @@
         "**/__pycache__": true,
         "wandb": true,
         "figures": true,
-        "configs": true,
-        "utils": true,
         "LICENSE": true,
         "assets": true,
         "save_finetuned": true,
-        "tensorboard": true
+        "tensorboard": true,
+        ".nfs*": true,
+        "venv": true,
+        "train_ssl.py": true
     }
 }
