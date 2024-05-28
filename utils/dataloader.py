@@ -4,7 +4,7 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision
 import torch
-from utils.InMemoryImageFolder import InMemoryImageFolder
+from utils.NpyDataLoader import NpyDataLoader
 
 def datainfo(logger, args):
     if args.dataset == 'CIFAR10':
@@ -87,10 +87,13 @@ def dataload(args, augmentations, normalize, data_info):
             *normalize]))
         
     elif args.dataset == 'Tiny-Imagenet':
-        train_dataset = InMemoryImageFolder(
-            root=os.path.join(args.datapath, 'train'), transform=augmentations)
-        val_dataset = InMemoryImageFolder(
-            root=os.path.join(args.datapath, 'val'), 
+        train_dataset = NpyDataLoader(
+            image_file=os.path.join(args.datapath, 'train_images.npy'), 
+            label_file=os.path.join(args.datapath, 'train_labels.npy'), 
+            transform=augmentations)
+        val_dataset = NpyDataLoader(
+            image_file=os.path.join(args.datapath, 'val_images.npy'), 
+            label_file=os.path.join(args.datapath, 'val_labels.npy'), 
             transform=transforms.Compose([
             transforms.Resize(data_info['img_size']), transforms.ToTensor(), *normalize]))
 
