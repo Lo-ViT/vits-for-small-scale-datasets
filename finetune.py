@@ -26,6 +26,9 @@ import datetime
 import wandb
 from pathlib import Path
 import time
+import cProfile, pstats, io
+from pstats import SortKey
+
 warnings.filterwarnings("ignore", category=Warning)
 
 best_acc1 = 0
@@ -144,6 +147,8 @@ def init_parser():
 
     parser.add_argument('--vit_mlp_ratio', default=2, type=int, help='MLP layers in the transformer encoder')
 
+    parser.add_argument("--performance_profile", help="Turn on performance profiler",action="store_true")
+    
     return parser
 
 
@@ -553,4 +558,24 @@ if __name__ == '__main__':
     logger_dict = Logger_dict(logger, save_path)
     keys = ['T Loss', 'T Top-1', 'V Loss', 'V Top-1']
     
-    main(args)
+    if args.performance_profile:
+        pr = cProfile.Profile()
+        pr.enable()
+        main(args)
+        pr.disable()
+        s = io.StringIO()
+        sortby = SortKey.CUMULATIVE
+        ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+
+        profile_dir = os.path.join(args.output_dir, args.project, args.name)
+        profile_path = os.path.join(profile_dir, "profile.txt")
+
+        if not os.path.isfile(profile_path):
+            if not os.path.isdir(profile_dir):
+                os.makedirs(profile_dir, exist_ok=True)
+            open(profile_path, "x")
+
+        ps.dump_stats(profile_path)
+
+    else:
+        main(args)
