@@ -69,7 +69,6 @@ class Block_ats_ss_ds(nn.Module):
         return x
 
 
-# TODO: actually add ats blocks
 class VisionTransformer_ats_ss_ds(nn.Module):
     """Vision Transformer"""
 
@@ -89,6 +88,8 @@ class VisionTransformer_ats_ss_ds(nn.Module):
         attn_drop_rate=0.0,
         drop_path_rate=0.0,
         norm_layer=nn.LayerNorm,
+        ats_blocks=[3, 4, 5, 6, 7, 8, 9, 10, 11],
+        drop_tokens=False,
         **kwargs,
     ):
         super().__init__()
@@ -107,25 +108,48 @@ class VisionTransformer_ats_ss_ds(nn.Module):
         self.pos_embed = nn.Parameter(torch.zeros(1, self.num_patches + 1, embed_dim))
         self.pos_drop = nn.Dropout(p=drop_rate)
 
+        # this doesnt seem to actually do anything,
+        # I could not find any reading use of the insert_control_point this is assigned to.
+        # Still leaving this here for completeness.
+        # control_flags = [True for _ in range(depth)]
+
         dpr = [
             x.item() for x in torch.linspace(0, drop_path_rate, depth)
         ]  # stochastic depth decay rule
-        self.blocks = nn.ModuleList(
-            [
-                Block(
-                    dim=embed_dim,
-                    num_heads=num_heads,
-                    mlp_ratio=mlp_ratio,
-                    qkv_bias=qkv_bias,
-                    qk_scale=qk_scale,
-                    drop=drop_rate,
-                    attn_drop=attn_drop_rate,
-                    drop_path=dpr[i],
-                    norm_layer=norm_layer,
+        self.blocks = []
+        for i in range(depth):
+            if i in self.ats_blocks:
+                self.blocks.append(
+                    ATSBlock(
+                        dim=embed_dim,
+                        num_heads=num_heads,
+                        mlp_ratio=mlp_ratio,
+                        qkv_bias=qkv_bias,
+                        qk_scale=qk_scale,
+                        drop=drop_rate,
+                        attn_drop=attn_drop_rate,
+                        drop_path=dpr[i],
+                        norm_layer=norm_layer,
+                        # See comment for `control_flags`
+                        # insert_control_point=control_flags[i],
+                        drop_tokens=drop_tokens,
+                    )
                 )
-                for i in range(depth)
-            ]
-        )
+            else:
+                self.blocks.append(
+                    Block(
+                        dim=embed_dim,
+                        num_heads=num_heads,
+                        mlp_ratio=mlp_ratio,
+                        qkv_bias=qkv_bias,
+                        qk_scale=qk_scale,
+                        drop=drop_rate,
+                        attn_drop=attn_drop_rate,
+                        drop_path=dpr[i],
+                        norm_layer=norm_layer,
+                    )
+                )
+        self.blocks = nn.ModuleList(self.blocks)
         self.norm = norm_layer(embed_dim)
 
         # Classifier head
