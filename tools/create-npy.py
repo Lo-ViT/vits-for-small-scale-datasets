@@ -11,7 +11,7 @@ def preprocess_and_save_images(root, save_path, dataset_type, transform=None):
 
     # Define the dataset using ImageFolder
     dataset = datasets.ImageFolder(
-        root=root,
+        root=os.path.join(root, dataset_type),
         transform=transform
     )
 
