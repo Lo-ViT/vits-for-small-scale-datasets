@@ -2,7 +2,7 @@ import os
 from PIL import Image
 from torchvision import datasets, transforms
 from torch.utils.data import Dataset
-
+from tqdm import tqdm
 class InMemoryImageFolder(Dataset):
     def __init__(self, root, transform=None):
         # Initialize variables
@@ -14,8 +14,8 @@ class InMemoryImageFolder(Dataset):
         valid_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.gif')
 
         # Load all the images and labels into memory
-        for class_id, class_name in enumerate(sorted(os.listdir(root))):
-            class_dir = os.path.join(root, class_name)
+        for class_id, class_name in tqdm(enumerate(sorted(os.listdir(root)))):
+            class_dir = os.path.join(root, class_name, "images")
             if os.path.isdir(class_dir):
                 for image_name in os.listdir(class_dir):
                     if image_name.lower().endswith(valid_extensions):
@@ -34,7 +34,8 @@ class InMemoryImageFolder(Dataset):
                             self.labels.append(class_id)
                         except Exception as e:
                             print(f"Failed to load image {image_path}: {e}")
-
+        print(f"Loaded {len(self.images)} images from {root}")
+        
     def __getitem__(self, index):
         # Return the preloaded image and label
         return self.images[index], self.labels[index]
