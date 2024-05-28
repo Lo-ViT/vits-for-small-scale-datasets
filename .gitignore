@@ -7,3 +7,5 @@ output
 venv
 **/*.pth
 .nfs*
+tools/**/*
+!tools/create-npy.py
