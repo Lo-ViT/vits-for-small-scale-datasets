@@ -1,0 +1,9 @@
+python finetune.py --arch vit  \
+                   --project "Vit on TinyImageNet" \
+                   --name "Tiny-Imagenet-VIT-baseline_test" \
+                   --datapath /graphics/scratch2/students/boettefe/data/tiny-imagenet-200
+                   --batch_size 128 \
+                   --epochs 100 \
+                   --pretrained_weights /graphics/scratch2/students/boettefe/data/vit_timnet_patch8_input64.pth \
+                   --output_dir /graphics/scratch2/students/boettefe/output \
+                   --dataset "Tiny-Imagenet" \

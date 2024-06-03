@@ -64,9 +64,9 @@ def init_parser():
 
     parser.add_argument('--datapath', default=f'{home}/vits-for-small-scale-datasets/data', type=str, help='dataset path')
     
-    parser.add_argument('--dataset', default='CIFAR10', choices=['CIFAR10', 'CIFAR100', 'Tiny-Imagenet', 'SVHN','CINIC'], type=str, help='small dataset path')
+    parser.add_argument('--dataset', default='Tiny-Imagenet', choices=['CIFAR10', 'CIFAR100', 'Tiny-Imagenet', 'SVHN','CINIC'], type=str, help='small dataset path')
 
-    parser.add_argument('-j', '--workers', default=4, type=int, metavar='N', help='number of data loading workers (default: 4)')
+    parser.add_argument('-j', '--workers', default=8, type=int, metavar='N', help='number of data loading workers (default: 4)')
 
     parser.add_argument('--print-freq', default=1, type=int, metavar='N', help='log frequency (by iteration)')
 
@@ -140,7 +140,7 @@ def init_parser():
 
     parser.add_argument("--checkpoint_key", default="teacher", type=str, help='Key to use in the checkpoint (example: "teacher")')
 
-    parser.add_argument('--patch_size', default=4, type=int, help='patch size for ViT')
+    parser.add_argument('--patch_size', default=8, type=int, help='patch size for ViT')
 
     parser.add_argument('--vit_mlp_ratio', default=2, type=int, help='MLP layers in the transformer encoder')
 
