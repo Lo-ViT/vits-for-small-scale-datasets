@@ -7,5 +7,4 @@ python finetune.py --arch vit-ats  \
                    --dataset CIFAR10 \
                    --batch_size 256 \
                    --epochs 100 \
-                   --gpu 0 \
-                   --nowandb
+                   --gpu 0
