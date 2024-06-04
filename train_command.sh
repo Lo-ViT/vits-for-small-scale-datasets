@@ -8,3 +8,4 @@ python finetune.py --arch vit-ats  \
                    --batch_size 256 \
                    --epochs 100 \
                    --gpu 0 \
+                   --nowandb
