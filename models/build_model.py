@@ -45,7 +45,7 @@ def create_model(img_size, n_classes, args):
             norm_layer=partial(nn.LayerNorm, eps=1e-6),
             ats_blocks=[],
             num_tokens=[65] * 9,
-            drop_tokens=True,
+            drop_tokens=False,
         )
 
     elif args.arch == 'cait':       
