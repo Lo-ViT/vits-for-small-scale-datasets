@@ -3,7 +3,7 @@
 python finetune.py --arch vit-ats  \
                    --output_dir /graphics/scratch2/students/nguyenlo \
                    --project "CIFAR10" \
-                   --name "0010 Improve ATS on CIFAR" \
+                   --name "0012 Improve ATS on CIFAR - All ATS" \
                    --dataset CIFAR10 \
                    --batch_size 256 \
                    --epochs 100 \
