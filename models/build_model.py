@@ -25,8 +25,8 @@ def create_model(img_size, n_classes, args):
             qkv_bias=True,
             drop_path_rate=args.sd,
             norm_layer=partial(nn.LayerNorm, eps=1e-6),
-            ats_blocks=[3],
-            num_tokens=[64] * 9,
+            ats_blocks=[3, 5, 7],
+            num_tokens=[65] * 9,
             drop_tokens=True,
         )
 
