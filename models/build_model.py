@@ -8,6 +8,10 @@ sys.path.insert(0,'submodules/ATS')
 from submodules.ATS.libs.models.transformers.vit import ViT as ViT_ats
 
 def create_model(img_size, n_classes, args):
+    # CIFAR
+    # 32 x 32
+    # patch size = 4
+    # (32 / 4)^2 = 64 tokens
     if args.arch == "vit-ats":
         patch_size = 4 if img_size == 32 else 8   #4 if img_size = 32 else 8
         model = ViT_ats(
@@ -21,8 +25,8 @@ def create_model(img_size, n_classes, args):
             qkv_bias=True,
             drop_path_rate=args.sd,
             norm_layer=partial(nn.LayerNorm, eps=1e-6),
-            ats_blocks=[3, 4, 5, 6, 7, 8, 9,],
-            num_tokens=[96] * 9,
+            ats_blocks=[3],
+            num_tokens=[196] * 9,
             drop_tokens=True,
         )
 
