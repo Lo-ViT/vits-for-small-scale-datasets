@@ -20,7 +20,10 @@ def create_model(img_size, n_classes, args):
             mlp_ratio=args.vit_mlp_ratio,
             qkv_bias=True,
             drop_path_rate=args.sd,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6)
+            norm_layer=partial(nn.LayerNorm, eps=1e-6),
+            ats_blocks=[3, 4, 5, 6, 7, 8, 9,],
+            num_tokens=[96] * 9,
+            drop_tokens=True,
         )
 
     elif args.arch == "vit":
