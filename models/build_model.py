@@ -8,6 +8,10 @@ sys.path.insert(0,'submodules/ATS')
 from submodules.ATS.libs.models.transformers.vit import ViT as ViT_ats
 
 def create_model(img_size, n_classes, args):
+    # CIFAR
+    # 32 x 32
+    # patch size = 4
+    # (32 / 4)^2 = 64 tokens
     if args.arch == "vit-ats":
         patch_size = 4 if img_size == 32 else 8   #4 if img_size = 32 else 8
         model = ViT_ats(
@@ -20,22 +24,29 @@ def create_model(img_size, n_classes, args):
             mlp_ratio=args.vit_mlp_ratio,
             qkv_bias=True,
             drop_path_rate=args.sd,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6)
+            norm_layer=partial(nn.LayerNorm, eps=1e-6),
+            ats_blocks=[3,5,7],
+            num_tokens=[65] * 9,
+            drop_tokens=True,
         )
 
     elif args.arch == "vit":
         patch_size = 4 if img_size == 32 else 8   #4 if img_size = 32 else 8
-        model = VisionTransformer(img_size=[img_size],
-            patch_size=args.patch_size,
-            in_chans=3,
-            num_classes=n_classes,
+        model = ViT_ats(
+            img_size = img_size,
+            patch_size = patch_size,
+            num_classes = n_classes,
             embed_dim=192,
-            depth=9,
-            num_heads=12,
+            depth = 9,
+            num_heads = 12,
             mlp_ratio=args.vit_mlp_ratio,
             qkv_bias=True,
             drop_path_rate=args.sd,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6))
+            norm_layer=partial(nn.LayerNorm, eps=1e-6),
+            ats_blocks=[],
+            num_tokens=[65] * 9,
+            drop_tokens=False,
+        )
 
     elif args.arch == 'cait':       
         patch_size = 4 if img_size == 32 else 8
