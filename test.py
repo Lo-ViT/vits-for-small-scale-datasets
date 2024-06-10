@@ -15,7 +15,7 @@ from finetune import init_parser
 import time
 home = str(Path.home())
 
-def test_model(model, test_loader, criterion, device,model_type:str):
+def test_model(model, test_loader, criterion, device):
     data_records = [] # list to store records for each batch
 
     model.eval()
@@ -54,17 +54,15 @@ def test_model(model, test_loader, criterion, device,model_type:str):
             })
 
             
-
     avg_loss = test_loss / total
     accuracy = 100. * correct / total
     print(f'Test Loss: {avg_loss:.4f}, Test Accuracy: {accuracy:.2f}%, Test Flops: {flops:.2f}, Test Wall Time: {wall_time:.2f}')
 
-    save_experiment_data_as_csv(data_records,model_type)
-
-    return avg_loss, accuracy, flops
+    #return avg_loss, accuracy, flops
+    return data_records # return test records
 
 """function to save batch data obt. from test"""
-def save_experiment_data_as_csv(data, filename):
+def save_experiment_data_as_csv(data:dict, filename):
     df = pd.DataFrame(data)
     df.to_csv(filename, index=False)
 
@@ -88,7 +86,13 @@ def main(args):
         model.load_state_dict(torch.load(args.model, map_location=device)["model_state_dict"])
 
     # Test model
-    test_model(model, test_loader, criterion, device,args.arch)
+    data_records = test_model(model, test_loader, criterion)
+
+    # TODO the filename should contain a better placeholder
+    model_type = args.arch
+    output_file_name = f"{model_type}{data_info['img_size']}_experiment.csv"
+    save_experiment_data_as_csv(data_records,output_file_name)
+
 
 if __name__ == "__main__":
     parser = init_parser()
