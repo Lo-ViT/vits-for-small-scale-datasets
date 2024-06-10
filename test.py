@@ -46,13 +46,12 @@ def test_model(model, test_loader, criterion, device,model_type:str):
             correct += predicted.eq(target).sum().item()
 
             # append data for this batch
-            for tokens_processed in processed_token_list:
-                data_records.append({
-                    'Batch': batch_idx,
-                    'Batch Size': batch_size,
-                    'Image Size': image_size,
-                    'Tokens Processed': tokens_processed
-                })
+            data_records.append({
+                'Batch': batch_idx,
+                'Batch Size': batch_size,
+                'Image Size': image_size,
+                'Tokens Processed': processed_token_list
+            })
 
             
 
