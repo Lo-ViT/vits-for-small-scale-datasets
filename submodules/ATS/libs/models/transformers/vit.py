@@ -215,6 +215,7 @@ class ViT(nn.Module):
         ats_blocks=[3, 4, 5, 6, 7, 8, 9, 10, 11],
         num_tokens=[197, 197, 197, 197, 197, 197, 197, 197, 197, 197, 197, 197],
         drop_tokens=False,
+        collect_dropped_token_idxs=False
     ):
         """
         Args:
@@ -287,6 +288,7 @@ class ViT(nn.Module):
                         norm_layer=norm_layer,
                         insert_control_point=control_flags[i],
                         drop_tokens=drop_tokens,
+                        collect_dropped_token_idxs = collect_dropped_token_idxs,
                     )
                 )
             else:
@@ -332,6 +334,9 @@ class ViT(nn.Module):
         trunc_normal_(self.cls_token, std=0.02)
         self.apply(self._init_weights)
         self._ref_num_tokens = None
+        self.collect_dropped_token_idxs = collect_dropped_token_idxs
+        if collect_dropped_token_idxs:
+            self.global_dropped_indices = {}
 
     @staticmethod
     def _init_weights(m):
@@ -385,6 +390,10 @@ class ViT(nn.Module):
                     sampler=sampler,
                     n_ref_tokens=init_n,
                 )
+                if self.collect_dropped_token_idxs:
+                    dropped_tokens = blk.attn.locally_dropped_tokens
+                    self.globalize_local_indices(dropped_tokens)
+
                 # idx += 1
                 # policies.append(policy)
             else:
@@ -394,6 +403,37 @@ class ViT(nn.Module):
         x = self.norm(x)[:, 0]
         x = self.pre_logits(x)
         return x, policies
+    
+    # DOES NOT WORK PROPERLY. Seems like I didnt quite do the indexing right, since this "drops" indexes out of bounds
+    def globalize_local_indices(self, dropped_indices_dict):
+        for batch_index in dropped_indices_dict.keys():
+            if batch_index in self.global_dropped_indices.keys():
+                last_global_indices = self.global_dropped_indices[batch_index][-1]
+                locally_dropped_indices = dropped_indices_dict[batch_index]
+                global_offset_list = self.mk_global_offset_list(last_global_indices, max(locally_dropped_indices))
+                globalized_dropped_indices = []
+                for local_idx in locally_dropped_indices:
+                    globalized_dropped_indices.append(local_idx + global_offset_list[local_idx])
+                new_global_indices = last_global_indices.copy() + globalized_dropped_indices
+                new_global_indices.sort()
+                self.global_dropped_indices[batch_index].append(new_global_indices)
+            else:
+                self.global_dropped_indices[batch_index] = [dropped_indices_dict[batch_index]]
+    
+    @staticmethod
+    def mk_global_offset_list(dropped_indices, max_local_idx):
+        offset = 0
+        local_idx = 0
+        global_idx = 0
+        global_offset_list = []
+        while local_idx <= max_local_idx:
+            while global_idx in dropped_indices:
+                offset += 1
+                global_idx += 1
+            global_offset_list.append(offset)
+            global_idx += 1
+            local_idx += 1
+        return global_offset_list
 
     def forward(self, x):
         x, policies = self.forward_features(x)

@@ -19,6 +19,7 @@ class AdaptiveTokenSampler(Attention):
         proj_drop=0.0,
         drop_path=0.0,
         drop_tokens=False,
+        collect_dropped_token_idxs=False
     ):
         super(AdaptiveTokenSampler, self).__init__(
             dim,
@@ -32,6 +33,8 @@ class AdaptiveTokenSampler(Attention):
         self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
         self.out_zero_mask = nn.Parameter(torch.zeros(1, dim), requires_grad=False)
         self.drop_tokens = drop_tokens
+        self.collect_dropped_token_idxs = collect_dropped_token_idxs
+        self.locally_dropped_tokens = None
 
     @staticmethod
     def get_unique_indices(indices: Tensor, max_value: int) -> Tensor:
@@ -69,16 +72,22 @@ class AdaptiveTokenSampler(Attention):
             .unsqueeze(0)
             .repeat(B, 1)
         )
+        # minimal non zero value of the normalized_cdf for the token axis (axis 1)
+        # retruns batch_size values. indexation [0] extracts the min values, discarding their indices
         ys_start = (
             torch.min(normalized_cdf + (normalized_cdf == 0).float() * 1e8, dim=1)[0]
             .unsqueeze(-1)
             .expand_as(ys)
         )
+        # tensor containing step numbers/indices for every batch item, up to a max of sampelled tokens -2
+        # expanded along token axis to fit ys
         steps = (
             torch.range(0, n_tokens - 2, device=normalized_cdf.device)
             .unsqueeze(0)
             .expand_as(ys_start)
         )
+
+
         ys = ys_start + (((ys * (n_tokens - 2)) - ys_start * steps) / (n_tokens - 2))
 
         return ys
@@ -132,14 +141,22 @@ class AdaptiveTokenSampler(Attention):
             cdf - cdf.min(dim=1)[0].unsqueeze(dim=1)
         ) / ((cdf.max(dim=1)[0] - cdf.min(dim=1)[0]) / 1.0).unsqueeze(dim=1)
 
+        # as the original comment below suggests this samples uniformly from "the y axis"
+        # to my understanding this just means n-token steps of the lenght of the smallest nonzero value in the normalized cfd
+        # the shape should be (B, n-token). Later comments seem to treat it as (B,N-1). Why?
         ys = self.create_ys(normalized_cdf, n_ref_tokens).unsqueeze(
             dim=2
         )  # sampled values from y-axis of size [B, n-1, 1]
         normalized_cdf = normalized_cdf.unsqueeze(dim=1)  # [B, 1, N - 1]
-
+ 
         # expanded_ys = torch.Tensor.expand(ys, (B, n_tokens - 1, N - 1))
         expanded_ys = torch.Tensor.expand(ys, (B, ys.shape[1], ys.shape[1]))
+        # assuming ys.shape[1] is n-token like I think, this would count the number of tokens that were dropped
+        # wouldnt this have to be 0 or negative then?
         diff_tokens = ys.shape[1] - (N - 1)
+        
+        # tensor containing the token indices of the tokens that are kept
+        # to fill the tensor other indices may appear more than once. TODO: where and why those indices?
         tokens_to_pick_ind = torch.min(
             torch.abs(expanded_ys - F.pad(normalized_cdf, (diff_tokens, 0))),
             dim=2,
@@ -151,6 +168,25 @@ class AdaptiveTokenSampler(Attention):
         tokens_to_pick_ind = tokens_to_pick_ind - diff_tokens
 
         # Sort attention matrix and add CLS weights.
+        """
+        THEORY: this seems to remove the original class token and the corresponding attention matrix
+                entries, which are on index [:,0,:] and [:,:,0,:] respectively. 
+                Then the pad calls add right hand side padding for the second to last dimension (see padding tuple).
+                This effectively adds a 0 to the end of the token axis, which had index N-1
+        """ 
+
+        # collect indices of elements which were dropped. these indices are local indices valid within the scope of this block.
+        if self.collect_dropped_token_idxs:
+            batch_size = tokens_to_pick_ind.shape[0]
+            num_tokens = tokens_to_pick_ind.shape[1]
+            locally_dropped_tokens = {}
+            for sample_idx in range(batch_size):
+                locally_dropped_tokens[sample_idx] = []
+                for token_idx in range(num_tokens):
+                    if token_idx not in tokens_to_pick_ind[sample_idx].tolist():
+                        locally_dropped_tokens[sample_idx].append(token_idx)
+            self.locally_dropped_tokens = locally_dropped_tokens
+
         attn_sorted = torch.gather(
             attn[:, :, 1:],
             2,
@@ -167,11 +203,32 @@ class AdaptiveTokenSampler(Attention):
         )
         raw_x_tmp = F.pad(raw_x_tmp, (0, 0, 0, 1), value=0.0)  # [B x n x C]
 
+        # tensor containing the indices of the tokens that are kept. 
+        # is of shape [B,N-1] where B is batch size and N is the number of tokens (including cls token)
+        # to fill up the tensor an element with the value N-1 is appended at the end of the tensor row for every dropped token
         unique_indices = self.get_unique_indices(
             indices=tokens_to_pick_ind, max_value=N - 1
         )[:, : N - 1]
 
         # Prune the attention matrix and input tokens.
+        """
+            THEORY: both attention and input tokens are reorganized along the input token axis 
+                    with gather. this has the effect that if we want to, for example, drop the 
+                    token with index 3 the value which was previously on index 4 and all following
+                    values are written one index lower than in the original tensor, while the value
+                    which was in index 3 for the original tensor is overwritten.
+
+                    This has the effect that all values that are kept appear in sorted order on the
+                    lower indices of the input token axis.
+
+                    The tensor is then filled up with zeroes, which are selected from the original
+                    tensor entry with index N-1, which seems to always be 0, after the pad operations
+                    earlier: 
+
+                    attn_tmp = F.pad(attn_sorted, (0, 0, 0, 1), value=0.0)
+                    raw_x_tmp = F.pad(raw_x_tmp, (0, 0, 0, 1), value=0.0)
+
+        """
         attn_tmp = torch.gather(
             attn_tmp,
             2,
@@ -183,10 +240,15 @@ class AdaptiveTokenSampler(Attention):
             raw_x_tmp, 1, unique_indices.unsqueeze(2).expand(B, n_tokens - 1, C)
         )
 
+        # likely reattaching the classification token
         attn_tmp = torch.cat([attn[:, :, 0:1], attn_tmp], dim=2)
         raw_x_tmp = torch.cat([raw_x[:, 0:1], raw_x_tmp], dim=1)
 
+        # policy is a bitmask with a 1 for every value in unique indices that is not N-1
+        # in other words each rows first contains L entries of value 1. After that follow enough entries with val 0 to fill the row
         policy = (unique_indices != (N - 1)).unsqueeze(-1).float()
+        # policy is extended on axis 1. likely by an entry accounting for the cls token. This entry is always 1 
+        # policy now has shape (B,N,1) 
         policy = F.pad(policy, (0, 0, 1, 0), value=1.0)
         selected_x = raw_x_tmp
         attn = attn_tmp
@@ -194,6 +256,7 @@ class AdaptiveTokenSampler(Attention):
         sampler = torch.nonzero(policy)
 
         return selected_x, attn, policy, sampler
+
 
     def forward(
         self,
@@ -249,7 +312,7 @@ class AdaptiveTokenSampler(Attention):
         selected_x, attn, policy, sampler = self.inverse_transform_sampling(
             sorted_scores, sorted_indices, attn, n_tokens, raw_x, n_ref_tokens
         )
-
+            
         x = (attn @ v).transpose(1, 2).reshape(B, attn.shape[2], C)
 
         # Pruning
@@ -284,6 +347,7 @@ class AdaptiveTokenSampler(Attention):
         x = self.proj(x, policy, sampler)
         x = x * policy
         x = self.proj_drop(x)
+
         return x, selected_x, policy, sampler
 
 
@@ -306,6 +370,7 @@ class ATSBlock(nn.Module):
         norm_layer=nn.LayerNorm,
         insert_control_point=False,
         drop_tokens=False,
+        collect_dropped_token_idxs=False
     ):
         super().__init__()
         self.insert_control_point = insert_control_point
@@ -319,6 +384,7 @@ class ATSBlock(nn.Module):
             attn_drop=attn_drop,
             drop_path=drop_path,
             drop_tokens=drop_tokens,
+            collect_dropped_token_idxs=collect_dropped_token_idxs
         )
 
         self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
@@ -330,6 +396,7 @@ class ATSBlock(nn.Module):
             act_layer=act_layer,
             drop=drop,
         )
+        self.collect_dropped_token_idxs = collect_dropped_token_idxs
 
     def forward(
         self,
@@ -347,9 +414,11 @@ class ATSBlock(nn.Module):
             raw_x=x,
             n_ref_tokens=n_ref_tokens,
         )
+
         x = selected_x + self.drop_path(x_out)
         x = x * policy
         out = self.mlp(x=self.norm2(x), policy=policy, sampler=sampler)
         x = x + self.drop_path(out)
         x = x * policy
+
         return x, policy

@@ -32,7 +32,7 @@ from pstats import SortKey
 warnings.filterwarnings("ignore", category=Warning)
 
 best_acc1 = 0
-MODELS = ['vit', 'vit-ats', 'swin' , 'cait']
+MODELS = ['vit', 'vit-ats', 'swin' , 'cait', 'vit-ats-hooked']
 home = str(Path.home())
 
 
