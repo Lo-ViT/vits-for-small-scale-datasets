@@ -45,7 +45,9 @@ class AdaptiveTokenSampler(Attention):
         """
         sorted_indices = torch.sort(indices, dim=1)[0]
 
+        # shift left is sorted_indices with the first value dropped and a 1 appended in the last index
         shift_left = F.pad(sorted_indices[:, 1:], (0, 1), value=1.0)
+        # if a value is equal to the value left of it, replace it with max_value, else keep the value
         unique_indices = torch.where(
             (shift_left - sorted_indices) == 0,
             max_value * torch.ones_like(indices),
@@ -156,7 +158,7 @@ class AdaptiveTokenSampler(Attention):
         diff_tokens = ys.shape[1] - (N - 1)
         
         # tensor containing the token indices of the tokens that are kept
-        # to fill the tensor other indices may appear more than once. TODO: where and why those indices?
+        # to fill the tensor other indices may appear more than once. 
         tokens_to_pick_ind = torch.min(
             torch.abs(expanded_ys - F.pad(normalized_cdf, (diff_tokens, 0))),
             dim=2,
@@ -167,6 +169,18 @@ class AdaptiveTokenSampler(Attention):
         # Offsetting token indices
         tokens_to_pick_ind = tokens_to_pick_ind - diff_tokens
 
+        # collect indices of elements which were dropped. these indices are local indices valid within the scope of this block.
+        if self.collect_dropped_token_idxs:
+            batch_size = tokens_to_pick_ind.shape[0]
+            locally_dropped_tokens = {}
+            for sample_idx in range(batch_size):
+                locally_dropped_tokens[sample_idx] = []
+                # -1 to account for the cls token entry in policy
+                for token_idx in range(1, int(self.retained_tokens[sample_idx].item()-1)):
+                    if token_idx not in tokens_to_pick_ind[sample_idx].tolist():
+                        locally_dropped_tokens[sample_idx].append(token_idx)
+            self.locally_dropped_tokens = locally_dropped_tokens
+
         # Sort attention matrix and add CLS weights.
         """
         THEORY: this seems to remove the original class token and the corresponding attention matrix
@@ -174,19 +188,6 @@ class AdaptiveTokenSampler(Attention):
                 Then the pad calls add right hand side padding for the second to last dimension (see padding tuple).
                 This effectively adds a 0 to the end of the token axis, which had index N-1
         """ 
-
-        # collect indices of elements which were dropped. these indices are local indices valid within the scope of this block.
-        if self.collect_dropped_token_idxs:
-            batch_size = tokens_to_pick_ind.shape[0]
-            num_tokens = tokens_to_pick_ind.shape[1]
-            locally_dropped_tokens = {}
-            for sample_idx in range(batch_size):
-                locally_dropped_tokens[sample_idx] = []
-                for token_idx in range(num_tokens):
-                    if token_idx not in tokens_to_pick_ind[sample_idx].tolist():
-                        locally_dropped_tokens[sample_idx].append(token_idx)
-            self.locally_dropped_tokens = locally_dropped_tokens
-
         attn_sorted = torch.gather(
             attn[:, :, 1:],
             2,
@@ -304,6 +305,10 @@ class AdaptiveTokenSampler(Attention):
         # --------------------------
 
         sorted_scores, sorted_indices = self.score_assignment_step(attn, v)
+
+        # use incoming policy to determine the number of tokens left per sample in the batch.
+        if self.collect_dropped_token_idxs:
+            self.retained_tokens = policy.sum(1)
 
         # --------------------------
         # Inverse Transform Sampling

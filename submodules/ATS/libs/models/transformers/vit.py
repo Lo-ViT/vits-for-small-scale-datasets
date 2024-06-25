@@ -337,6 +337,7 @@ class ViT(nn.Module):
         self.collect_dropped_token_idxs = collect_dropped_token_idxs
         if collect_dropped_token_idxs:
             self.global_dropped_indices = {}
+            self.batch_offset = 0
 
     @staticmethod
     def _init_weights(m):
@@ -399,26 +400,31 @@ class ViT(nn.Module):
             else:
                 x = blk(x=x, policy=policy, sampler=sampler)
                 # policies.append(policy)
-
+        if self.collect_dropped_token_idxs:
+            self.batch_offset += B
+        
         x = self.norm(x)[:, 0]
         x = self.pre_logits(x)
         return x, policies
     
-    # DOES NOT WORK PROPERLY. Seems like I didnt quite do the indexing right, since this "drops" indexes out of bounds
+    # ISSUE: Check why the first index is ALWAYS dropped. This might be an issue with the cls token.
     def globalize_local_indices(self, dropped_indices_dict):
         for batch_index in dropped_indices_dict.keys():
-            if batch_index in self.global_dropped_indices.keys():
-                last_global_indices = self.global_dropped_indices[batch_index][-1]
+            if (batch_index+self.batch_offset) in self.global_dropped_indices.keys():
+                last_global_indices = self.global_dropped_indices[batch_index+self.batch_offset][-1]
                 locally_dropped_indices = dropped_indices_dict[batch_index]
-                global_offset_list = self.mk_global_offset_list(last_global_indices, max(locally_dropped_indices))
+                if len(locally_dropped_indices) >= 1:
+                    global_offset_list = self.mk_global_offset_list(last_global_indices, max(locally_dropped_indices))
+                else:
+                    global_offset_list = []
                 globalized_dropped_indices = []
                 for local_idx in locally_dropped_indices:
                     globalized_dropped_indices.append(local_idx + global_offset_list[local_idx])
                 new_global_indices = last_global_indices.copy() + globalized_dropped_indices
                 new_global_indices.sort()
-                self.global_dropped_indices[batch_index].append(new_global_indices)
+                self.global_dropped_indices[batch_index+self.batch_offset].append(new_global_indices)
             else:
-                self.global_dropped_indices[batch_index] = [dropped_indices_dict[batch_index]]
+                self.global_dropped_indices[batch_index+self.batch_offset] = [dropped_indices_dict[batch_index]]
     
     @staticmethod
     def mk_global_offset_list(dropped_indices, max_local_idx):
