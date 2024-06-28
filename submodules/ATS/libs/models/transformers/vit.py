@@ -375,6 +375,12 @@ class ViT(nn.Module):
 
         x = torch.cat((cls_tokens, x), dim=1)
         x = x + self.pos_embed
+
+        # x represents initial tokenization vect. of image
+        # store x to give as an input to the visualization function
+        if self.collect_dropped_token_idxs:
+           initial_tokenized_input = x
+        
         x = self.pos_drop(x)
 
         init_n = x.shape[1]
@@ -402,6 +408,10 @@ class ViT(nn.Module):
                 # policies.append(policy)
         if self.collect_dropped_token_idxs:
             self.batch_offset += B
+
+            # visualize images
+            #self.get_visualization_of_images(initial_tokenized_input)
+
         
         x = self.norm(x)[:, 0]
         x = self.pre_logits(x)
@@ -425,6 +435,14 @@ class ViT(nn.Module):
                 self.global_dropped_indices[batch_index+self.batch_offset].append(new_global_indices)
             else:
                 self.global_dropped_indices[batch_index+self.batch_offset] = [dropped_indices_dict[batch_index]]
+
+    # ISSUE: Debug initial_tokenized_input to understand it's exact form
+    # derive the algorithm to map the vector into an image (map positional embeddings to spatial locations)
+    def get_visualization_of_images(self,initial_tokenized_input):
+
+        # dropped_indices = self.global_dropped_indices
+        # derive a visualization out of dropped_indices and initial_tokenized_input
+        pass
     
     @staticmethod
     def mk_global_offset_list(dropped_indices, max_local_idx):
